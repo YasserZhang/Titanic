@@ -43,15 +43,17 @@ library(rpart.plot)
 library(RColorBrewer)
 fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, data=train, method="class")
 fancyRpartPlot(fit)
-
+# customize the decision tree by manually chopping off branches you think not appropriate
 fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, data=train,
              method="class")
 new.fit <- prp(fit,snip=TRUE)$obj
 fancyRpartPlot(new.fit)
-### An interactive version of the decision tree will appear in the plot tab where you simply click
-### on the nodes that you want to kill. Once you’re satisfied with the tree, hit ‘quit’ and it will
-### be stored to the new.fit object. Try to look for overly complex decisions being made, and kill 
-### the nodes that appear to go to far.
+"""
+An interactive version of the decision tree will appear in the plot tab where you simply click
+ on the nodes that you want to kill. Once you’re satisfied with the tree, hit ‘quit’ and it will
+ be stored to the new.fit object. Try to look for overly complex decisions being made, and kill 
+ the nodes that appear to go to far.
+"""
 # predict Survival or not to test data based on fit
 Prediction <- predict(fit, test, type = "class")
 # build a new data frame that only include PassengerId and Survived for the use of submission
@@ -84,6 +86,7 @@ so let’s combine a few of the most unusual ones. We’ll begin with the French
 Mademoiselle and Madame are pretty similar (so long as you don’t mind offending) 
 so let’s combine them into a single category:
 """
+
 combi$Title[combi$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
 # note: The %in% operator checks to see if a value is part of the vector we’re comparing it to.
 # combine several male titles whose holders are military men or rich or noble people.
@@ -92,8 +95,6 @@ combi$Title[combi$Title %in% c('Capt', 'Don', 'Major', 'Sir', 'Jonkheer')] <- 'S
 combi$Title[combi$Title %in% c('Dona', 'Lady', 'the Countess')] <- 'Lady'
 # Our final step is to change the variable type back to a factor, as these are essentially categories that we have created:
 combi$Title <- factor(combi$Title)
-
-
 # Let's look at SibSp (siblings) and Parch (parents and children), and calculate each passenger's family size
 combi$FamilySize <- combi$SibSp + combi$Parch + 1
 # extract each passenger's last name, which is the first part in the name column
@@ -104,7 +105,6 @@ combi$FamilyID <- paste(as.character(combi$FamilySize), combi$Surname, sep="")
 head(combi$FamilyID)
 # check out an example of FamilyID
 combi[combi$FamilyID == "3Brown",]
-
 # build a new data frame holding the table of FamilyID
 famIDs <- data.frame(table(combi$FamilyID))
 # customize the famIDs data frame to a new one which only holds rows whose Var1 frequency is less than or equal to 2
@@ -115,7 +115,6 @@ combi$FamilyID[combi$FamilyID %in% famIDs$Var1]  <- "small"
 combi$FamilyID <- factor(combi$FamilyID)
 # To this point, we finish the manipulation on names and titles.
 #########################
-
 # split combi and bring back the train data
 train1  <- combi[1:891,]
 # see the relation between the title and survival rate
@@ -133,6 +132,19 @@ Prediction <- predict(fit, test, type = "class")
 submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
 # write the submit data into a csv file
 write.csv(submit, file = "myfirstdtree.csv", row.names = FALSE)
+###############
+# use Random Forest!!!
+"""
+R’s Random Forest algorithm has a few restrictions that we did not have with our decision trees.
+The big one has been the elephant in the room until now, we have to clean up the missing values
+in our dataset.
+"""
+# build a decision tree used to predict age
+Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Title + FamilySize,
+                data=combi[!is.na(combi$Age),], method="anova")
+# predict an age value for age-deficit rows based on the decision tree.
+combi$Age[is.na(combi$Age)] <- round(predict(Agefit, combi[is.na(combi$Age),]))
+summary(combi)
 
 
 
