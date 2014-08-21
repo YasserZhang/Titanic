@@ -60,7 +60,7 @@ Prediction <- predict(fit, test, type = "class")
 submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
 # write the submit data into a csv file
 write.csv(submit, file = "myfirstdtree.csv", row.names = FALSE)
-
+#########################################
 # manipulate text information
 class(train$Name)
 train$Name[1]
@@ -79,14 +79,12 @@ combi$Title <- sapply(combi$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]
 combi$Title <- sub(' ', '', combi$Title)
 # Let's check out the new column's summary content with table function
 table(combi$Title)
-
 """
 there are a few very rare titles in here that won’t give our model much to work with, 
 so let’s combine a few of the most unusual ones. We’ll begin with the French. 
 Mademoiselle and Madame are pretty similar (so long as you don’t mind offending) 
 so let’s combine them into a single category:
 """
-
 combi$Title[combi$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
 # note: The %in% operator checks to see if a value is part of the vector we’re comparing it to.
 # combine several male titles whose holders are military men or rich or noble people.
@@ -114,13 +112,12 @@ combi$FamilyID[combi$FamilyID %in% famIDs$Var1]  <- "small"
 # change the class of FamilyID to factor
 combi$FamilyID <- factor(combi$FamilyID)
 # To this point, we finish the manipulation on names and titles.
-#########################
 # split combi and bring back the train data
-train1  <- combi[1:891,]
+train  <- combi[1:891,]
 # see the relation between the title and survival rate
-table(train1$Survived)
-table(train1$Title)
-table(train1$Title, train1$Survived)
+table(train$Survived)
+table(train$Title)
+table(train$Title, train$Survived)
 # split combi and bring back the test data
 test <- combi[892:1309,]
 # build a new decision tree based on existing columns and others that we just generate
@@ -132,7 +129,7 @@ Prediction <- predict(fit, test, type = "class")
 submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
 # write the submit data into a csv file
 write.csv(submit, file = "myfirstdtree.csv", row.names = FALSE)
-###############
+##################################
 # use Random Forest!!!
 """
 R’s Random Forest algorithm has a few restrictions that we did not have with our decision trees.
@@ -145,10 +142,66 @@ Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Title + F
 # predict an age value for age-deficit rows based on the decision tree.
 combi$Age[is.na(combi$Age)] <- round(predict(Agefit, combi[is.na(combi$Age),]))
 summary(combi)
+# continue to clean data, here we replace two blank values in Embarked with "S"
+table(combi$Embarked)
+which(combi$Embarked =='')
+combi$Embarked[c(62,830)] = "S"
+combi$Embarked <- as.factor(combi$Embarked)
+# replace NA value in Fare with the median value of the Fare column in the combi data
+summary(combi$Fare)
+which(is.na(combi$Fare))
+combi$Fare[1044]  <- median(combi$Fare, na.rm = TRUE)
+# Random Forest does not tolerate factors with more than 32 levels, we have to decrease levels of FamilyID
+combi$FamilyID2 <- combi$FamilyID
+combi$FamilyID2 <- as.character(combi$FamilyID2)
+combi$FamilyID2[combi$FamilySize <= 3] <- 'Small'
+combi$FamilyID2 <- factor(combi$FamilyID2)
+table(combi$FamilyID2)
+# change Sex attribute class to factor
+combi$Sex <- as.factor(combi$Sex)
+# install random forest
+install.packages('randomForest')
+library(randomForest)
+# set seed
+set.seed(416)
+# seperate train and test data
+train  <- combi[1:891,]
+test <- combi[892:1309,]
+# train a randomForest learning model
+"""
+The importance=TRUE argument allows us to inspect variable importance as we’ll see,
+ and the ntree argument specifies how many trees we want to grow.
+"""
+fit <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize +
+                      FamilyID2, data=train, importance=TRUE, ntree=2000)
+# see the importance of each attribute in the model
+varImpPlot(fit)
+# type fit to see a bayesian table, Type I and Type II errors
+fit
+# train a randomForest learning model without SibSp and Parch
+fit <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + Fare + Embarked + Title + FamilySize +
+                      FamilyID2, data=train, importance=TRUE, ntree=2000)
+varImpPlot(fit)
+fit
+# istall another ensemble model, party
+install.packages('party')
+library(party)
+"""
+Let’s try a forest of conditional inference trees. They make their decisions in slightly different ways,
+using a statistical test rather than a purity measure, but the basic construction of each tree
+is fairly similar.
+"""
+"""
+Conditional inference trees are able to handle factors with more levels than Random Forests can,
+so let’s go back to out original version of FamilyID. 
+"""
+set.seed(415)
+fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize + FamilyID,
+               data = train, controls=cforest_unbiased(ntree=2000, mtry=3))
+#apply the result learning model to test data
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
 
 
 
-
-data.frame(SibSp = train$SibSp, Parch = train$Parch)
 
 
